@@ -42,7 +42,6 @@ Spotify/
 │   │   ├── spotify-dark.html
 │   │   └── spotify.html
 │   ├── .env
-│   ├── index.js
 │   ├── server.js
 │   ├── package.json
 │   └── package-lock.json
@@ -68,8 +67,8 @@ Spotify/
 
 1. Clone o repositório:
 ```bash
-git clone https://github.com/seu-usuario/spotify-svg-generator.git
-cd spotify-svg-generator
+git clone https://github.com/seu-usuario/spotify-now-playing.git
+cd spotify-now-playing
 ```
 
 2. Instale as dependências:
@@ -77,7 +76,7 @@ cd spotify-svg-generator
 npm install
 ```
 
-3. Configure as variáveis de ambiente (veja seção [Configuração](#%EF%B8%8F-configuração))
+3. Configure as variáveis de ambiente (veja seção [Configuração](#-configuração))
 
 ## ⚙️ Configuração
 
@@ -254,7 +253,7 @@ Config.validate();          // Valida configurações obrigatórias
 - Se estiver tocando: mostra música atual com status "Vibing to:"
 - Se não estiver tocando: escolhe aleatoriamente das últimas 10 tocadas com status "Was playing:"
 
-### index.js
+### server.js
 **Responsabilidade:** Entry point e handler Vercel Serverless
 
 ```javascript
