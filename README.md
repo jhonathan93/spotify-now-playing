@@ -2,6 +2,12 @@
 
 Gerador de SVG dinâmico que exibe a música atual ou recente do Spotify em tempo real. Perfeito para adicionar ao seu perfil do GitHub, site pessoal ou qualquer lugar que aceite SVGs.
 
+<p align="center">
+  <a href="https://open.spotify.com/user/22d73si4irb2tgyla7wseuqwy?si=39a3efd62af34cfe">
+    <img src="https://listening-spotify.vercel.app/api?type=svg" alt="Spotify Playing" width="350" />
+  </a>
+</p>
+
 ## 📋 Índice
 
 - [Características](#-características)
