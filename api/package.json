@@ -1,0 +1,16 @@
+{
+  "name": "spotify-now-playing",
+  "version": "1.0.0",
+  "description": "Spotify Now Playing API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}
