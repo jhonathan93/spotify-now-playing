@@ -36,7 +36,7 @@ class SVGGenerator {
 
     getTrackData(nowPlayingData, recentPlaysData = null) {
         if (!nowPlayingData || !nowPlayingData.item || nowPlayingData.item === 'None' || nowPlayingData.item === null) {
-            const currentStatus = "Was playing:";
+            const currentStatus = "Tocou recentemente";
             const recentPlaysLength = recentPlaysData.items.length;
             const itemIndex = Math.floor(Math.random() * recentPlaysLength);
             const item = recentPlaysData.items[itemIndex].track;
@@ -44,7 +44,7 @@ class SVGGenerator {
             return { item, status: currentStatus };
         } else {
             const item = nowPlayingData.item;
-            const currentStatus = "Vibing to:";
+            const currentStatus = "Ouvindo agora";
 
             return { item, status: currentStatus };
         }
