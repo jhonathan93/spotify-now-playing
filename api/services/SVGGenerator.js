@@ -1,6 +1,3 @@
-const SpotifyClient = require('./SpotifyClient');
-const TemplateManager = require('./TemplateManager');
-
 class SVGGenerator {
     constructor(spotifyClient, templateManager) {
         this.spotifyClient = spotifyClient;

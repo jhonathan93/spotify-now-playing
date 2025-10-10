@@ -50,6 +50,10 @@ class SpotifyClient {
         }
     }
 
+    /**
+     * @returns {Promise<>}
+     * @see https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens
+     */
     async refreshAccessToken() {
         const data = new URLSearchParams({
             grant_type: 'refresh_token',
@@ -93,6 +97,10 @@ class SpotifyClient {
         }
     }
 
+    /**
+     * @returns {Promise<>}
+     * @see https://developer.spotify.com/documentation/web-api/reference/get-the-users-currently-playing-track
+     */
     async getNowPlaying() {
         return this.safeRequest(async () => {
             const token = await this.refreshAccessToken();
@@ -105,6 +113,10 @@ class SpotifyClient {
         });
     }
 
+    /**
+     * @returns {Promise<>}
+     * @see https://developer.spotify.com/documentation/web-api/reference/get-recently-played
+     */
     async getRecentlyPlayed() {
         return this.safeRequest(async () => {
             const token = await this.refreshAccessToken();
