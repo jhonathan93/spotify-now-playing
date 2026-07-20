@@ -33,10 +33,13 @@ class SVGGenerator {
 
     getTrackData(nowPlayingData, recentPlaysData = null) {
         if (!nowPlayingData || !nowPlayingData.item || nowPlayingData.item === 'None' || nowPlayingData.item === null) {
+            const items = (recentPlaysData && Array.isArray(recentPlaysData.items)) ? recentPlaysData.items : [];
+
+            if (items.length === 0) return { item: null, status: "Nenhuma música encontrada" };
+
             const currentStatus = "Tocou recentemente";
-            const recentPlaysLength = recentPlaysData.items.length;
-            const itemIndex = Math.floor(Math.random() * recentPlaysLength);
-            const item = recentPlaysData.items[itemIndex].track;
+            const itemIndex = Math.floor(Math.random() * items.length);
+            const item = items[itemIndex].track;
 
             return { item, status: currentStatus };
         } else {
@@ -55,6 +58,22 @@ class SVGGenerator {
 
         const trackData = this.getTrackData(nowPlayingData, recentPlaysData);
         const item = trackData.item;
+
+        if (!item) {
+            return {
+                song_name: null,
+                artist_name: null,
+                album_name: null,
+                song_url: null,
+                artist_url: null,
+                album_url: null,
+                image_url: '',
+                status: trackData.status,
+                is_playing: false,
+                duration_ms: 0,
+                progress_ms: 0
+            };
+        }
 
         let imageUrl = '';
 
@@ -96,6 +115,27 @@ class SVGGenerator {
         const trackData = this.getTrackData(nowPlayingData, recentPlaysData);
         const item = trackData.item;
 
+        const bars = this.generateBars();
+
+        if (!item) {
+            const data = {
+                contentBar: bars.contentBar,
+                barCSS: bars.barCSS,
+                artistName: '',
+                songName: this.escapeHtml(trackData.status),
+                songURI: '',
+                artistURI: '',
+                image: '',
+                status: '',
+                background_color: backgroundColor,
+                border_color: borderColor
+            };
+
+            const templateName = this.templateManager.getCurrentTemplate();
+
+            return this.templateManager.render(templateName, data);
+        }
+
         let image = '';
 
         if (item.album && item.album.images && item.album.images.length > 0) {
@@ -103,8 +143,6 @@ class SVGGenerator {
 
             if (imageUrl) image = await this.loadImageB64(imageUrl);
         }
-
-        const bars = this.generateBars();
 
         const data = {
             contentBar: bars.contentBar,
