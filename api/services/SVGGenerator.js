@@ -14,21 +14,58 @@ class SVGGenerator {
 
     generateBarCSS() {
         let barCSS = "";
-        let left = 1;
+        const step = 100 / this.barCount;
 
         for (let i = 1; i <= this.barCount; i++) {
             const anim = Math.floor(Math.random() * (1350 - 1000 + 1)) + 1000;
-            barCSS += `.bar:nth-child(${i}) { left: ${left}px; animation-duration: ${anim}ms; }`;
-            left += 4;
+            const left = ((i - 1) * step).toFixed(2);
+            barCSS += `.bar:nth-child(${i}) { left: ${left}%; animation-duration: ${anim}ms; }`;
         }
 
         return barCSS;
     }
 
     async loadImageB64(url) {
-        const response = await fetch(url);
-        const buffer = await response.arrayBuffer();
-        return Buffer.from(buffer).toString('base64');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const buffer = await response.arrayBuffer();
+            return Buffer.from(buffer).toString('base64');
+        } catch (err) {
+            console.error('Failed to load album image:', err.message);
+            return '';
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    getImages(item) {
+        return item.album?.images || item.images || item.show?.images || [];
+    }
+
+    getArtistName(item) {
+        if (item.artists && item.artists.length > 0) return item.artists[0].name;
+        if (item.show && item.show.name) return item.show.name;
+        return 'Desconhecido';
+    }
+
+    getArtistUrl(item) {
+        if (item.artists && item.artists.length > 0) return item.artists[0].external_urls?.spotify || '';
+        if (item.show) return item.show.external_urls?.spotify || '';
+        return '';
+    }
+
+    getAlbumName(item) {
+        return item.album?.name || item.show?.name || '';
+    }
+
+    getAlbumUrl(item) {
+        return item.album?.external_urls?.spotify || item.show?.external_urls?.spotify || '';
     }
 
     getTrackData(nowPlayingData, recentPlaysData = null) {
@@ -75,23 +112,45 @@ class SVGGenerator {
             };
         }
 
-        let imageUrl = '';
-
-        if (item.album && item.album.images && item.album.images.length > 0) imageUrl = item.album.images[1]?.url || item.album.images[0]?.url || '';
+        const images = this.getImages(item);
+        const imageUrl = images.length > 0 ? (images[1]?.url || images[0]?.url || '') : '';
 
         return {
-            song_name: item.name,
-            artist_name: item.artists[0].name,
-            album_name: item.album.name,
-            song_url: item.external_urls.spotify,
-            artist_url: item.artists[0].external_urls.spotify,
-            album_url: item.album.external_urls.spotify,
+            song_name: item.name || null,
+            artist_name: this.getArtistName(item),
+            album_name: this.getAlbumName(item),
+            song_url: item.external_urls?.spotify || null,
+            artist_url: this.getArtistUrl(item),
+            album_url: this.getAlbumUrl(item),
             image_url: imageUrl,
             status: trackData.status,
             is_playing: !!(nowPlayingData && nowPlayingData.item),
-            duration_ms: item.duration_ms,
+            duration_ms: item.duration_ms || 0,
             progress_ms: nowPlayingData?.progress_ms || 0
         };
+    }
+
+    formatTime(ms) {
+        if (!ms || ms <= 0) return '0:00';
+
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    adjustHexColor(hex, amount) {
+        const clean = (hex || '181414').replace('#', '');
+        const num = parseInt(clean, 16);
+
+        if (isNaN(num)) return clean;
+
+        const r = Math.max(0, Math.min(255, (num >> 16) + amount));
+        const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
+        const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
+
+        return ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
     }
 
     escapeHtml(text) {
@@ -116,6 +175,7 @@ class SVGGenerator {
         const item = trackData.item;
 
         const bars = this.generateBars();
+        const backgroundColorEnd = this.adjustHexColor(backgroundColor, 14);
 
         if (!item) {
             const data = {
@@ -127,7 +187,14 @@ class SVGGenerator {
                 artistURI: '',
                 image: '',
                 status: '',
+                statusDotClass: 'dot-idle',
+                statusPillDisplay: 'none',
+                progressDisplay: 'none',
+                progressPercent: 0,
+                formattedProgress: '0:00',
+                formattedDuration: '0:00',
                 background_color: backgroundColor,
+                background_color_end: backgroundColorEnd,
                 border_color: borderColor
             };
 
@@ -137,23 +204,35 @@ class SVGGenerator {
         }
 
         let image = '';
+        const images = this.getImages(item);
+        const imageUrl = images.length > 0 ? (images[1]?.url || images[0]?.url) : null;
 
-        if (item.album && item.album.images && item.album.images.length > 0) {
-            const imageUrl = item.album.images[1]?.url || item.album.images[0]?.url;
+        if (imageUrl) image = await this.loadImageB64(imageUrl);
 
-            if (imageUrl) image = await this.loadImageB64(imageUrl);
-        }
+        const isCurrentlyPlaying = trackData.status === 'Ouvindo agora';
+        const durationMs = item.duration_ms || 0;
+        const progressMs = nowPlayingData?.progress_ms || 0;
+        const progressPercent = (isCurrentlyPlaying && durationMs > 0)
+            ? Math.min(100, Math.round((progressMs / durationMs) * 100))
+            : 0;
 
         const data = {
             contentBar: bars.contentBar,
             barCSS: bars.barCSS,
-            artistName: this.escapeHtml(item.artists[0].name),
-            songName: this.escapeHtml(item.name),
-            songURI: item.external_urls.spotify,
-            artistURI: item.artists[0].external_urls.spotify,
+            artistName: this.escapeHtml(this.getArtistName(item)),
+            songName: this.escapeHtml(item.name || ''),
+            songURI: item.external_urls?.spotify || '',
+            artistURI: this.getArtistUrl(item),
             image: image,
             status: trackData.status,
+            statusDotClass: isCurrentlyPlaying ? 'dot-live' : 'dot-idle',
+            statusPillDisplay: 'inline-flex',
+            progressDisplay: (isCurrentlyPlaying && durationMs > 0) ? 'flex' : 'none',
+            progressPercent,
+            formattedProgress: this.formatTime(progressMs),
+            formattedDuration: this.formatTime(durationMs),
             background_color: backgroundColor,
+            background_color_end: backgroundColorEnd,
             border_color: borderColor
         };
 

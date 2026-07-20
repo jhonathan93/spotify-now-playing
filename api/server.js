@@ -69,6 +69,8 @@ const server = http.createServer(async (req, res) => {
             } else {
                 const svg = await svgGenerator.generate(backgroundColor, borderColor);
 
+                if (!svg) throw new Error('Failed to render SVG template');
+
                 res.setHeader('Content-Type', 'image/svg+xml');
                 res.setHeader('Cache-Control', 's-maxage=1');
                 res.writeHead(200);

@@ -1,9 +1,21 @@
 const Config = require('../config/Config');
 
+class SpotifyAuthError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'SpotifyAuthError';
+    }
+}
+
 class SpotifyClient {
     static REFRESH_TOKEN_URL = 'https://accounts.spotify.com/api/token';
     static NOW_PLAYING_URL = 'https://api.spotify.com/v1/me/player/currently-playing';
     static RECENTLY_PLAYED_URL = 'https://api.spotify.com/v1/me/player/recently-played?limit=10';
+    static REQUEST_TIMEOUT_MS = 8000;
+    static TOKEN_EXPIRY_BUFFER_MS = 60 * 1000;
+
+    static cachedAccessToken = null;
+    static cachedAccessTokenExpiresAt = 0;
 
     constructor() {
         this.clientId = Config.get('SPOTIFY_CLIENT_ID');
@@ -31,12 +43,21 @@ class SpotifyClient {
             options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), SpotifyClient.REQUEST_TIMEOUT_MS);
+        options.signal = controller.signal;
+
         try {
             const response = await fetch(url, options);
             const httpCode = response.status;
             let responseText = '';
 
             if (httpCode !== 204) responseText = await response.text();
+
+            if (httpCode === 429) {
+                const retryAfter = response.headers.get('Retry-After');
+                throw new Error(`Rate limited by Spotify (429)${retryAfter ? `, retry after ${retryAfter}s` : ''}`);
+            }
 
             if (httpCode >= 400) throw new Error(`HTTP Error ${httpCode}: ${responseText}`);
 
@@ -45,8 +66,14 @@ class SpotifyClient {
                 httpCode
             };
         } catch (err) {
-            console.error('Network error in makeRequest:', err);
+            if (err.name === 'AbortError') {
+                throw new Error(`Request to ${url} timed out after ${SpotifyClient.REQUEST_TIMEOUT_MS}ms`);
+            }
+
+            console.error('Network error in makeRequest:', err.message);
             throw new Error('Failed to make request: ' + err.message);
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
@@ -55,6 +82,16 @@ class SpotifyClient {
      * @see https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens
      */
     async refreshAccessToken() {
+        const now = Date.now();
+
+        if (SpotifyClient.cachedAccessToken && now < SpotifyClient.cachedAccessTokenExpiresAt) {
+            return SpotifyClient.cachedAccessToken;
+        }
+
+        if (!this.refreshToken) {
+            throw new SpotifyAuthError('SPOTIFY_REFRESH_TOKEN não está configurado');
+        }
+
         const data = new URLSearchParams({
             grant_type: 'refresh_token',
             refresh_token: this.refreshToken
@@ -67,8 +104,13 @@ class SpotifyClient {
         try {
             result = await this.makeRequest(SpotifyClient.REFRESH_TOKEN_URL, headers, data);
         } catch (err) {
-            console.error('Error refreshing token:', err);
-            throw new Error('Unable to refresh token');
+            if (err.message.includes('invalid_grant')) {
+                console.error('Refresh token expirado ou revogado. Gere um novo SPOTIFY_REFRESH_TOKEN.');
+                throw new SpotifyAuthError('Refresh token expirado ou revogado — gere um novo e atualize a variável SPOTIFY_REFRESH_TOKEN');
+            }
+
+            console.error('Error refreshing token:', err.message);
+            throw new Error('Unable to refresh token: ' + err.message);
         }
 
         let responseData;
@@ -82,17 +124,26 @@ class SpotifyClient {
 
         if (!responseData.access_token) {
             console.error('Token refresh failed:', responseData);
-            throw new Error('Failed to refresh token: ' + JSON.stringify(responseData));
+            throw new Error('Failed to refresh token: ' + (responseData.error_description || JSON.stringify(responseData)));
         }
+
+        SpotifyClient.cachedAccessToken = responseData.access_token;
+        const expiresInMs = (responseData.expires_in || 3600) * 1000;
+        SpotifyClient.cachedAccessTokenExpiresAt = now + expiresInMs - SpotifyClient.TOKEN_EXPIRY_BUFFER_MS;
 
         return responseData.access_token;
     }
 
-    async safeRequest(fn) {
+    async safeRequest(label, fn) {
         try {
             return await fn();
         } catch (err) {
-            console.error(`[${fn.name}] Error:`, err);
+            if (err instanceof SpotifyAuthError) {
+                console.error(`[SpotifyClient.${label}] Erro de autenticação:`, err.message);
+            } else {
+                console.error(`[SpotifyClient.${label}] Error:`, err.message);
+            }
+
             return {};
         }
     }
@@ -102,7 +153,7 @@ class SpotifyClient {
      * @see https://developer.spotify.com/documentation/web-api/reference/get-the-users-currently-playing-track
      */
     async getNowPlaying() {
-        return this.safeRequest(async () => {
+        return this.safeRequest('getNowPlaying', async () => {
             const token = await this.refreshAccessToken();
             const headers = [`Authorization: Bearer ${token}`];
             const result = await this.makeRequest(SpotifyClient.NOW_PLAYING_URL, headers);
@@ -118,7 +169,7 @@ class SpotifyClient {
      * @see https://developer.spotify.com/documentation/web-api/reference/get-recently-played
      */
     async getRecentlyPlayed() {
-        return this.safeRequest(async () => {
+        return this.safeRequest('getRecentlyPlayed', async () => {
             const token = await this.refreshAccessToken();
             const headers = [`Authorization: Bearer ${token}`];
             const result = await this.makeRequest(SpotifyClient.RECENTLY_PLAYED_URL, headers);
